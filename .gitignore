@@ -1,0 +1,13 @@
+# Ignore compiled executables
+*.exe
+
+# Ignore specific folder
+MPI_Software/
+MPI_Installation/
+GCC_File/
+Prev_year_lab/
+
+#Ignore all file with .odt extension
+*.odt
+# Ignore all start with ~b
+~b*
