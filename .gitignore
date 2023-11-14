@@ -9,5 +9,5 @@ Prev_year_lab/
 
 #Ignore all file with .odt extension
 *.odt
-# Ignore all start with ~b
-~b*
+# Ignore all start with ~$b
+~$b*
