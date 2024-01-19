@@ -1,143 +1,113 @@
-#include<stdio.h>
-#include "mpi.h"
-#include<time.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <mpi.h>
 
-#define N 512 // Size of the matrix
+int NUM_MATRICES = 30;
+int MATRIX_ROWS = 3;
+int MATRIX_COLS = 3;
+int MATRIX_B_COLS = 2; // Number of columns in matrix B
 
-MPI_Status status;
-
-// These are our matrix holders
-double matrix_a[N][N], matrix_b[N][N], matrix_c[N][N];
-
-int main(int argc, char **argv)
-{
-	int processId, numOfProcess, numOfSlaveProcess, numOfRowsForSlave, offset;
-	double startTime, endTime;
-	MPI_Init(&argc, &argv); // Initiating the mpi environment
-	MPI_Comm_rank(MPI_COMM_WORLD, &processId); // get the current process id
-	MPI_Comm_size(MPI_COMM_WORLD, &numOfProcess); // get the total number of process
-
-	numOfSlaveProcess = numOfProcess - 1; // One process is the master process others are slave process
-
-	// Master process
-	if(processId == 0){
-
-		// Record the start time
-		startTime = MPI_Wtime();
-
-
-		printf("number of process = %d\n", numOfProcess);
-		// Generate matrix a and b with some random number
-		srand(time(NULL));
-		for(int i = 0; i < N; i++)
-		{
-			for(int j = 0; j < N; j++)
-			{
-				matrix_a[i][j] = rand()%10;
-				matrix_b[i][j] = rand()%10;
-			}
-		}
-		printf("\n\t Matrix - Matrix Multiplication using MPI\n");
-
-		// print matrix A
-		printf("\n Matrix A\n\n");
-		for(int i = 0; i < N; i++)
-		{
-			for(int j = 0; j < N; j++)
-			{
-				printf("%0.f\t", matrix_a[i][j]);
-			}
-			printf("\n");
-		}
-		// print matrix B
-		printf("\n Matrix B\n\n");
-		for(int i = 0; i < N; i++)
-		{
-			for(int j = 0; j < N; j++)
-			{
-				printf("%0.f\t", matrix_b[i][j]);
-			}
-			printf("\n");
-		}
-
-		// Now from this process we will distribute task to all the slave process;
-		// So we have to decide the #rows of the Matrix A, Which we will sent to each slave process
-		numOfRowsForSlave = N / numOfSlaveProcess;
-		offset = 0; // this variable is the starting row which we will sent to slave process
-
-		// Assigning the calculation details to slave process, start from process 1
-		// Each message tag is 1
-		for(int dest = 1; dest <= numOfSlaveProcess; dest++)
-		{
-			MPI_Send(&offset, 1, MPI_INT, dest, 1, MPI_COMM_WORLD);
-			MPI_Send(&numOfRowsForSlave, 1, MPI_INT, dest, 1, MPI_COMM_WORLD);
-			MPI_Send(&matrix_a[offset][0], numOfRowsForSlave * N, MPI_DOUBLE, dest, 1, MPI_COMM_WORLD);
-			MPI_Send(&matrix_b, N * N, MPI_DOUBLE, dest, 1, MPI_COMM_WORLD);
-			offset = offset + numOfRowsForSlave;
-		}
-		for(int i = 1; i<= numOfSlaveProcess; i++)
-		{
-			int source = i;
-			MPI_Recv(&offset, 1, MPI_INT, source, 2, MPI_COMM_WORLD, &status);
-			MPI_Recv(&numOfRowsForSlave, 1, MPI_INT, source, 2, MPI_COMM_WORLD, &status);
-			MPI_Recv(&matrix_c[offset][0], numOfRowsForSlave*N, MPI_DOUBLE, source, 2, MPI_COMM_WORLD, &status);
-		}
-		// Print the result matrix
-		printf("\n Resultant Matrix C = A * B\n\n");
-		for(int i = 0; i < N; i++)
-		{
-			printf("\n");
-			for(int j = 0; j < N; j++)
-			{
-				printf("%0.f\t", matrix_c[i][j]);
-			}
-			printf("\n");
-		}
-		printf("\n");
-		// Record the end time
-		endTime = MPI_Wtime();
-		printf("\n Elapsed Time = %f second\n\n", endTime - startTime);
-	}
-	// Slave process
-	if(processId > 0){
-		int source = 0;
-		// Now the slave process should receive the data that is sent by the master process
-		// Each process will receive this data seperately and will execute the task and 
-		// store the result in matrix C then resend to master process
-		MPI_Recv(&offset, 1, MPI_INT, source, 1, MPI_COMM_WORLD, &status);
-		MPI_Recv(&numOfRowsForSlave, 1, MPI_INT, source, 1, MPI_COMM_WORLD, &status);
-		MPI_Recv(&matrix_a, numOfRowsForSlave * N, MPI_DOUBLE, source, 1, MPI_COMM_WORLD, &status);
-		MPI_Recv(&matrix_b, N * N, MPI_DOUBLE, source, 1, MPI_COMM_WORLD, &status);
-
-		// Matrix multiplication
-		for(int k = 0; k < N; k++)
-		{
-			for(int i = 0; i < numOfRowsForSlave; i++)
-			{
-				matrix_c[i][k] = 0;
-				for(int j = 0; j < N; j++)
-				{
-					matrix_c[i][k] = matrix_c[i][k] + matrix_a[i][j] * matrix_b[j][k];
-				}
-			}
-		}
-		// Send the calculated result back to master process
-		MPI_Send(&offset, 1, MPI_INT, 0, 2, MPI_COMM_WORLD);
-		MPI_Send(&numOfRowsForSlave, 1, MPI_INT, 0, 2, MPI_COMM_WORLD);
-		MPI_Send(&matrix_c, numOfRowsForSlave * N, MPI_DOUBLE, 0, 2, MPI_COMM_WORLD);
-		
-	}
-
-	MPI_Finalize();
+// Function to print a matrix
+void printMatrix(int rows, int cols, int matrix[rows][cols]) {
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            printf("%3d ", matrix[i][j]);
+        }
+        printf("\n");
+    }
+    printf("\n");
 }
 
-// Expected output
-/*
-For N = 512
+int main(int argc, char** argv) {
+    
+    MPI_Init(&argc, &argv);
 
-Number of process = 2
-Elapsed Time = 0.921194 second
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-Number of process = 5
-Elapsed Time = 0.639368 second
-*/
+
+    double startTime, endTime;
+    if(rank == 0){
+        printf("Enter Number of matrices: \n");
+        scanf("%d", &NUM_MATRICES);
+        printf("Enter Number of rows in matrix A: \n");
+        scanf("%d", &MATRIX_ROWS);
+        printf("Enter Number of columns in matrix A: \n");
+        scanf("%d", &MATRIX_COLS);
+        printf("Enter Number of columns in matrix B: \n");
+        scanf("%d", &MATRIX_B_COLS);
+    }
+    MPI_Bcast(&NUM_MATRICES, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    if (NUM_MATRICES % size != 0) {
+        printf("Number of matrices must be divisible by the number of processes.\n");
+        MPI_Finalize();
+        return 1;
+    }
+    int root = 0;
+    int matrices[NUM_MATRICES][MATRIX_ROWS][MATRIX_COLS];
+    int matrixB[NUM_MATRICES][MATRIX_COLS][MATRIX_B_COLS];
+    int resultMatrices[NUM_MATRICES][MATRIX_ROWS][MATRIX_B_COLS];
+
+    if (rank == root) {
+        // Initialize the matrices in the root process
+        for (int k = 0; k < NUM_MATRICES; k++) {
+            for (int i = 0; i < MATRIX_ROWS; i++) {
+                for (int j = 0; j < MATRIX_COLS; j++) {
+                    matrices[k][i][j]  = rand() % 10;
+                }
+            }
+            for(int i = 0; i < MATRIX_COLS; i++){
+                for(int j = 0; j < MATRIX_B_COLS; j++){
+                    matrixB[k][i][j] = rand() % 10;
+                }
+            }                
+        }
+    }
+
+    // Barrier to synchronize all processes before timing starts
+    MPI_Barrier(MPI_COMM_WORLD);
+    startTime = MPI_Wtime();
+
+    // Buffer to store the portion of the matrices assigned to each process
+    int localMatrices[NUM_MATRICES / size][MATRIX_ROWS][MATRIX_COLS];
+    int localMatrixB[NUM_MATRICES / size][MATRIX_COLS][MATRIX_B_COLS];
+    // Scatter matrices from the root process to all processes
+    MPI_Scatter(matrices, (NUM_MATRICES / size) * MATRIX_ROWS * MATRIX_COLS, MPI_INT, localMatrices, (NUM_MATRICES / size) * MATRIX_ROWS * MATRIX_COLS, MPI_INT, root, MPI_COMM_WORLD);
+    MPI_Scatter(matrixB, (NUM_MATRICES / size) * MATRIX_COLS * MATRIX_B_COLS, MPI_INT, localMatrixB, (NUM_MATRICES / size) * MATRIX_COLS * MATRIX_B_COLS, MPI_INT, root, MPI_COMM_WORLD);
+    // Each process multiplies its matrix with matrix B
+    for (int k = 0; k < NUM_MATRICES / size; k++) {
+        for (int i = 0; i < MATRIX_ROWS; i++) {
+            for (int j = 0; j < MATRIX_B_COLS; j++) {
+                resultMatrices[k][i][j] = 0;
+                for (int l = 0; l < MATRIX_COLS; l++) {
+                    resultMatrices[k][i][j] += localMatrices[k][i][l] * localMatrixB[k][l][j];
+                }
+            }
+        }
+    }
+
+    // Barrier to synchronize all processes before timing ends
+    MPI_Barrier(MPI_COMM_WORLD);
+    endTime = MPI_Wtime();
+
+    // Print timing information for each process
+    printf("Process %d: Time taken = %f seconds\n", rank, endTime - startTime);
+
+    // Gather result matrices from all processes to the root process
+    int gatheredMatrices[NUM_MATRICES][MATRIX_ROWS][MATRIX_B_COLS];
+    MPI_Gather(resultMatrices, (NUM_MATRICES / size) * MATRIX_ROWS * MATRIX_B_COLS, MPI_INT, gatheredMatrices, (NUM_MATRICES / size) * MATRIX_ROWS * MATRIX_B_COLS, MPI_INT, root, MPI_COMM_WORLD);
+
+    // Root process prints all 15 result matrices
+    if (rank == root) {
+        printf("\n All %d Result Matrices:\n", NUM_MATRICES);
+        for (int k = 0; k < NUM_MATRICES; k++) {
+            printf("Matrix %d:\n", k);
+            printMatrix(MATRIX_ROWS, MATRIX_B_COLS, gatheredMatrices[k]);
+        }
+    }
+
+    MPI_Finalize();
+
+    return 0;
+}
